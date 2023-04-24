@@ -271,6 +271,7 @@ public class BackupOperation extends BaseOperation<BackupKeyringParcel> {
 
         try {
             arOutStream = new ArmoredOutputStream(outStream);
+            arOutStream.clearHeaders();
             byte[] data = mKeyRepository.loadPublicKeyRingData(masterKeyId);
             UncachedKeyRing uncachedKeyRing = UncachedKeyRing.decodeFromData(data);
             CanonicalizedPublicKeyRing ring = (CanonicalizedPublicKeyRing) uncachedKeyRing.canonicalize(log, 2, true);
@@ -292,6 +293,7 @@ public class BackupOperation extends BaseOperation<BackupKeyringParcel> {
 
         try {
             arOutStream = new ArmoredOutputStream(outStream);
+            arOutStream.clearHeaders();
             if (extraSecretKeyHeaders != null) {
                 addExtraHeadersToStream(arOutStream, extraSecretKeyHeaders);
             }

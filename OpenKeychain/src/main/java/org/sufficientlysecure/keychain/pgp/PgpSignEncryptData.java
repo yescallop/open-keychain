@@ -53,6 +53,7 @@ public abstract class PgpSignEncryptData implements Parcelable {
 
     public abstract int getCompressionAlgorithm();
     public abstract int getSignatureHashAlgorithm();
+    public abstract int getAEADAlgorithm();
     public abstract int getSymmetricEncryptionAlgorithm();
 
     public abstract boolean isEnableAsciiArmorOutput();
@@ -74,6 +75,7 @@ public abstract class PgpSignEncryptData implements Parcelable {
                 .setDetachedSignature(false)
                 .setHiddenRecipients(false)
                 .setCompressionAlgorithm(OpenKeychainCompressionAlgorithmTags.USE_DEFAULT)
+                .setAEADAlgorithm(PgpSecurityConstants.OpenKeychainAEADAlgorithmTags.USE_DEFAULT)
                 .setSignatureHashAlgorithm(OpenKeychainHashAlgorithmTags.USE_DEFAULT)
                 .setSymmetricEncryptionAlgorithm(OpenKeychainSymmetricKeyAlgorithmTags.USE_DEFAULT);
     }
@@ -91,6 +93,7 @@ public abstract class PgpSignEncryptData implements Parcelable {
         public abstract Builder setVersionHeader(String versionHeader);
 
         public abstract Builder setCompressionAlgorithm(int compressionAlgorithm);
+        public abstract Builder setAEADAlgorithm(int aeadAlgorithm);
         public abstract Builder setSignatureHashAlgorithm(int signatureHashAlgorithm);
         public abstract Builder setSymmetricEncryptionAlgorithm(int symmetricEncryptionAlgorithm);
 

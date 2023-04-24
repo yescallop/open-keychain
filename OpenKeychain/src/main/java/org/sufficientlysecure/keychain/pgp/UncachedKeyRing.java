@@ -261,6 +261,7 @@ public class UncachedKeyRing {
     }
     public void encodeArmored(OutputStream out, String version) throws IOException {
         ArmoredOutputStream aos = new ArmoredOutputStream(out);
+        aos.clearHeaders();
         if (version != null) {
             aos.setHeader("Version", version);
         }
@@ -1319,7 +1320,7 @@ public class UncachedKeyRing {
             // if this is a secret key which does not yet occur in the secret ring
             if (sKey == null) {
                 // generate a stripped secret (sub)key
-                sKey = PGPSecretKey.constructGnuDummyKey(key);
+                sKey = PGPPublicKeyUtils.constructGnuDummyKey(key);
             }
             sKey = PGPSecretKey.replacePublicKey(sKey, key);
             return PGPSecretKeyRing.insertSecretKey(secRing, sKey);

@@ -53,9 +53,8 @@ dependencies {
     implementation project(':extern:MaterialChipsInput')
 
     // implementation project(':openkeychain:extern:bouncycastle:core')
-    implementation 'org.bouncycastle:bcprov-jdk15on:1.68'
-    implementation project(':extern:bouncycastle:pg')
-    // implementation project(':openkeychain:extern:bouncycastle:prov')
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.73'
+    implementation 'org.bouncycastle:bcpg-jdk18on:1.73'
 
     implementation 'androidx.work:work-runtime:2.7.1'
 

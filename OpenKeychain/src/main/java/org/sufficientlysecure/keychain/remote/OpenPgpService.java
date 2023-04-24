@@ -644,6 +644,7 @@ public class OpenPgpService extends Service {
                     try {
                         if (requestAsciiArmor) {
                             outputStream = new ArmoredOutputStream(outputStream);
+                            ((ArmoredOutputStream) outputStream).clearHeaders();
                         }
                         keyRing.encode(outputStream);
                     } finally {

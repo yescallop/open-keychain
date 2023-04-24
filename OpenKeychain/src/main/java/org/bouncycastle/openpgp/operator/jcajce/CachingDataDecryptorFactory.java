@@ -18,6 +18,7 @@ import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPPublicKeyEncryptedData;
 import org.bouncycastle.openpgp.operator.PGPDataDecryptor;
 import org.bouncycastle.openpgp.operator.PublicKeyDataDecryptorFactory;
+import org.sufficientlysecure.keychain.pgp.PGPPublicKeyUtils;
 
 public class CachingDataDecryptorFactory implements PublicKeyDataDecryptorFactory
 {
@@ -45,8 +46,8 @@ public class CachingDataDecryptorFactory implements PublicKeyDataDecryptorFactor
         mWrappedDecryptor = wrapped;
     }
 
-    public boolean hasCachedSessionData(PGPPublicKeyEncryptedData encData) throws PGPException {
-        ByteBuffer bi = ByteBuffer.wrap(encData.getSessionKey()[0]);
+    public boolean hasCachedSessionData(PGPPublicKeyEncryptedData encData) {
+        ByteBuffer bi = ByteBuffer.wrap(PGPPublicKeyUtils.getEncSessionKey(encData));
         return mSessionKeyCache.containsKey(bi);
     }
 
@@ -81,6 +82,14 @@ public class CachingDataDecryptorFactory implements PublicKeyDataDecryptorFactor
             return mWrappedDecryptor.createDataDecryptor(withIntegrityPacket, encAlgorithm, key);
         }
         return mOperatorHelper.createDataDecryptor(withIntegrityPacket, encAlgorithm, key);
+    }
+
+    @Override
+    public PGPDataDecryptor createDataDecryptor(int aeadAlgorithm, byte[] iv, int chunkSize, int encAlgorithm, byte[] key) throws PGPException {
+        if (mWrappedDecryptor != null) {
+            return mWrappedDecryptor.createDataDecryptor(aeadAlgorithm, iv, chunkSize, encAlgorithm, key);
+        }
+        return mOperatorHelper.createDataDecryptor(aeadAlgorithm, iv, chunkSize, encAlgorithm, key);
     }
 
 }

@@ -35,6 +35,7 @@ import org.bouncycastle.bcpg.sig.KeyFlags;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPPublicKey;
 import org.bouncycastle.openpgp.PGPSignature;
+import org.bouncycastle.openpgp.jcajce.AllowHiddenRecipientsJcePublicKeyKeyEncryptionMethodGenerator;
 import org.bouncycastle.openpgp.operator.KeyFingerPrintCalculator;
 import org.bouncycastle.openpgp.operator.RFC6637Utils;
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPKeyConverter;
@@ -72,7 +73,7 @@ public class CanonicalizedPublicKey extends UncachedPublicKey {
     }
 
     JcePublicKeyKeyEncryptionMethodGenerator getPubKeyEncryptionGenerator(boolean hiddenRecipients) {
-        return new JcePublicKeyKeyEncryptionMethodGenerator(mPublicKey, hiddenRecipients);
+        return new AllowHiddenRecipientsJcePublicKeyKeyEncryptionMethodGenerator(mPublicKey, hiddenRecipients);
     }
 
     public boolean canSign() {

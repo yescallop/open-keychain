@@ -24,6 +24,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.security.SignatureException;
 import java.util.Date;
@@ -37,6 +38,7 @@ import androidx.annotation.NonNull;
 import android.text.TextUtils;
 import android.webkit.MimeTypeMap;
 
+import org.bouncycastle.bcpg.AEADEncDataPacket;
 import org.bouncycastle.bcpg.ArmoredInputStream;
 import org.bouncycastle.openpgp.PGPCompressedData;
 import org.bouncycastle.openpgp.PGPDataValidationException;
@@ -218,6 +220,7 @@ public class PgpDecryptVerifyOperation extends BaseOperation<PgpDecryptVerifyInp
         byte[] decryptedSessionKey;
 
         int symmetricEncryptionAlgo = 0;
+        boolean isAead;
 
         HashSet<Long> skippedDisallowedEncryptionKeys = new HashSet<>();
         KeySecurityProblem encryptionKeySecurityProblem = null;
@@ -453,7 +456,8 @@ public class PgpDecryptVerifyOperation extends BaseOperation<PgpDecryptVerifyInp
             log.add(LogType.MSG_DC_CLEAR_META_MIME, indent + 1, mimeType);
 
             // this operation skips the entire stream to find the data length!
-            Long originalSize = literalData.findDataLength();
+            // FIXME: This is not easily implemented so it's set to null for now.
+            Long originalSize = null;
 
             if (originalSize != null) {
                 log.add(LogType.MSG_DC_CLEAR_META_SIZE, indent + 1,
@@ -563,7 +567,7 @@ public class PgpDecryptVerifyOperation extends BaseOperation<PgpDecryptVerifyInp
                     log.add(LogType.MSG_DC_ERROR_INTEGRITY_CHECK, indent);
                     return new DecryptVerifyResult(DecryptVerifyResult.RESULT_ERROR, log);
                 }
-            } else if ( ! signatureChecker.isInitialized() ) {
+            } else if ( ! signatureChecker.isInitialized() && ! esResult.isAead ) {
                 // If no signature is present, we *require* an MDC!
                 // Handle missing integrity protection like failed integrity protection!
                 // The MDC packet can be stripped by an attacker!
@@ -832,19 +836,30 @@ public class PgpDecryptVerifyOperation extends BaseOperation<PgpDecryptVerifyInp
                     return result.with(new DecryptVerifyResult(log,
                             RequiredInputParcel.createSecurityTokenDecryptOperation(
                                     decryptionKey.getRing().getMasterKeyId(),
-                                    decryptionKey.getKeyId(), encryptedDataAsymmetric.getSessionKey()[0]
+                                    decryptionKey.getKeyId(), PGPPublicKeyUtils.getEncSessionKey(encryptedDataAsymmetric)
                     ), cryptoInput));
                 }
             }
 
             try {
                 result.cleartextStream = encryptedDataAsymmetric.getDataStream(decryptorFactory);
-            } catch (PGPKeyValidationException | ArrayIndexOutOfBoundsException e) {
+            } catch (PGPException | ArrayIndexOutOfBoundsException e) {
                 log.add(LogType.MSG_DC_ERROR_CORRUPT_DATA, indent + 1);
                 return result.with(new DecryptVerifyResult(DecryptVerifyResult.RESULT_ERROR, log));
             }
 
             result.symmetricEncryptionAlgo = encryptedDataAsymmetric.getSymmetricAlgorithm(decryptorFactory);
+
+            try {
+                Field encData = PGPEncryptedData.class.getDeclaredField("encData");
+                encData.setAccessible(true);
+                result.isAead = encData.get(encryptedDataAsymmetric) instanceof AEADEncDataPacket;
+            } catch (NoSuchFieldException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+
             result.encryptedData = encryptedDataAsymmetric;
 
             Map<ByteBuffer, byte[]> cachedSessionKeys = decryptorFactory.getCachedSessionKeys();

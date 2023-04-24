@@ -25,6 +25,7 @@ import androidx.annotation.Nullable;
 
 import org.bouncycastle.asn1.nist.NISTNamedCurves;
 import org.bouncycastle.asn1.teletrust.TeleTrusTNamedCurves;
+import org.bouncycastle.bcpg.AEADAlgorithmTags;
 import org.bouncycastle.bcpg.CompressionAlgorithmTags;
 import org.bouncycastle.bcpg.HashAlgorithmTags;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
@@ -47,16 +48,16 @@ public class PgpSecurityConstants {
      */
     private static HashSet<Integer> sSecureSymmetricAlgorithms = new HashSet<>(Arrays.asList(
             // General remarks: We try to keep the list short to reduce attack surface
-            // SymmetricKeyAlgorithmTags.IDEA, // Bad key schedule (weak keys), implementation difficulties (easy to make errors)
-            SymmetricKeyAlgorithmTags.TRIPLE_DES, // RFC4880: "MUST implement TripleDES"
-            SymmetricKeyAlgorithmTags.CAST5, // default in many gpg, pgp versions, 128 bit key, RFC4880: "SHOULD implement AES-128 and CAST5"
+            // IDEA: deprecated by draft-ietf-openpgp-crypto-refresh-08
+            // TRIPLE_DES: deprecated by draft-ietf-openpgp-crypto-refresh-08
+            // CAST5: deprecated by draft-ietf-openpgp-crypto-refresh-08
             // BLOWFISH: Twofish is the successor
             // SAFER: not used widely
             // DES: < 128 bit security
             SymmetricKeyAlgorithmTags.AES_128,
             SymmetricKeyAlgorithmTags.AES_192,
             SymmetricKeyAlgorithmTags.AES_256,
-            SymmetricKeyAlgorithmTags.TWOFISH // 128 bit
+            SymmetricKeyAlgorithmTags.TWOFISH // 256 bit
             // CAMELLIA_128: not used widely
             // CAMELLIA_192: not used widely
             // CAMELLIA_256: not used widely
@@ -74,9 +75,9 @@ public class PgpSecurityConstants {
      * all other algorithms are rejected with OpenPgpSignatureResult.RESULT_INSECURE
      */
     private static HashSet<Integer> sSecureHashAlgorithms = new HashSet<>(Arrays.asList(
-            // MD5: broken
-            HashAlgorithmTags.SHA1, //  RFC4880: "MUST implement SHA-1", TODO: disable when SHA256 is widely deployed
-            HashAlgorithmTags.RIPEMD160, // same security properties as SHA1, TODO: disable when SHA256 is widely deployed
+            // MD5: deprecated by draft-ietf-openpgp-crypto-refresh-08
+            // SHA1: deprecated by draft-ietf-openpgp-crypto-refresh-08
+            // RIPEMD160: deprecated by draft-ietf-openpgp-crypto-refresh-08
             // DOUBLE_SHA: not used widely
             // MD2: not used widely
             // TIGER_192: not used widely
@@ -103,7 +104,7 @@ public class PgpSecurityConstants {
             NISTNamedCurves.getOID("P-256").getId(),
             NISTNamedCurves.getOID("P-384").getId(),
             NISTNamedCurves.getOID("P-521").getId(),
-            CustomNamedCurves.getOID("secp256k1").getId(),
+//            CustomNamedCurves.getOID("secp256k1").getId(),
             TeleTrusTNamedCurves.getOID("brainpoolP256r1").getId(),
             TeleTrusTNamedCurves.getOID("brainpoolP384r1").getId(),
             TeleTrusTNamedCurves.getOID("brainpoolP512r1").getId(),
@@ -150,7 +151,7 @@ public class PgpSecurityConstants {
                 }
                 return null;
             }
-            case PublicKeyAlgorithmTags.EDDSA: {
+            case PublicKeyAlgorithmTags.EDDSA_LEGACY: {
                 return null;
             }
             // ELGAMAL_GENERAL: deprecated in RFC 4880, use ELGAMAL_ENCRYPT
@@ -169,6 +170,15 @@ public class PgpSecurityConstants {
             SymmetricKeyAlgorithmTags.AES_256, // AES received most cryptanalysis over the years and is still secure!
             SymmetricKeyAlgorithmTags.AES_192,
             SymmetricKeyAlgorithmTags.AES_128,
+    };
+
+    /**
+     * These array is written as a list of preferred AEAD algorithms into keys created by us.
+     * Other implementations may choose to honor this selection.
+     * (Most preferred is first)
+     */
+    public static final int[] PREFERRED_AEAD_ALGORITHMS = new int[]{
+            AEADAlgorithmTags.OCB,
     };
 
     /**
@@ -206,6 +216,16 @@ public class PgpSecurityConstants {
     public static final int DEFAULT_SYMMETRIC_ALGORITHM = SymmetricKeyAlgorithmTags.AES_256;
 
     public interface OpenKeychainSymmetricKeyAlgorithmTags extends SymmetricKeyAlgorithmTags {
+        int USE_DEFAULT = -1;
+    }
+
+    /**
+     * Always use OCB!
+     * We always ignore the preferred hash algos of the recipient!
+     */
+    public static final int DEFAULT_AEAD_ALGORITHM = AEADAlgorithmTags.OCB;
+
+    public interface OpenKeychainAEADAlgorithmTags extends AEADAlgorithmTags {
         int USE_DEFAULT = -1;
     }
 

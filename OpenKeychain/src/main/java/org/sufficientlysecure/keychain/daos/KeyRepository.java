@@ -198,6 +198,7 @@ public class KeyRepository extends AbstractDao {
     private byte[] getKeyRingAsArmoredData(byte[] data) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ArmoredOutputStream aos = new ArmoredOutputStream(bos);
+        aos.clearHeaders();
 
         aos.write(data);
         aos.close();

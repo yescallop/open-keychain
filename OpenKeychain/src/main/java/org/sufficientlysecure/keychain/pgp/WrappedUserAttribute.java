@@ -32,7 +32,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class WrappedUserAttribute implements Serializable {
 
@@ -40,37 +44,58 @@ public class WrappedUserAttribute implements Serializable {
     public static final int UAT_IMAGE = UserAttributeSubpacketTags.IMAGE_ATTRIBUTE;
     public static final int UAT_URI_ATTRIBUTE = 101;
 
-    private PGPUserAttributeSubpacketVector mVector;
+    private UserAttributeSubpacket[] mSubpackets;
 
     WrappedUserAttribute(PGPUserAttributeSubpacketVector vector) {
-        mVector = vector;
+        try {
+            Field field = PGPUserAttributeSubpacketVector.class.getDeclaredField("packets");
+            field.setAccessible(true);
+            mSubpackets = (UserAttributeSubpacket[]) field.get(vector);
+        } catch (NoSuchFieldException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private WrappedUserAttribute(UserAttributeSubpacket subpacket) {
+        mSubpackets = new UserAttributeSubpacket[] { subpacket };
     }
 
     PGPUserAttributeSubpacketVector getVector() {
-        return mVector;
+        return PGPUserAttributeSubpacketVector.fromSubpackets(mSubpackets);
     }
 
     public int getType() {
-        UserAttributeSubpacket[] subpackets = mVector.toSubpacketArray();
-        if (subpackets.length > 0) {
-            return subpackets[0].getType();
+        if (mSubpackets.length > 0) {
+            return mSubpackets[0].getType();
         }
         return 0;
     }
 
     public static WrappedUserAttribute fromSubpacket (int type, byte[] data) {
-        UserAttributeSubpacket subpacket = new UserAttributeSubpacket(type, data);
-        PGPUserAttributeSubpacketVector vector = new PGPUserAttributeSubpacketVector(
-                new UserAttributeSubpacket[] { subpacket });
+        Constructor<UserAttributeSubpacket> constructor;
+        try {
+            constructor = UserAttributeSubpacket.class.getDeclaredConstructor(int.class, byte[].class);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+        constructor.setAccessible(true);
 
-        return new WrappedUserAttribute(vector);
-
+        try {
+            return new WrappedUserAttribute(constructor.newInstance(type, data));
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        } catch (InstantiationException e) {
+            throw new RuntimeException(e);
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public byte[] getEncoded () throws IOException {
-        UserAttributeSubpacket[] subpackets = mVector.toSubpacketArray();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        for (UserAttributeSubpacket subpacket : subpackets) {
+        for (UserAttributeSubpacket subpacket : mSubpackets) {
             subpacket.encode(out);
         }
         return out.toByteArray();
@@ -86,7 +111,7 @@ public class WrappedUserAttribute implements Serializable {
         UserAttributeSubpacket[] result = new UserAttributeSubpacket[list.size()];
         list.toArray(result);
         return new WrappedUserAttribute(
-                new PGPUserAttributeSubpacketVector(result));
+                PGPUserAttributeSubpacketVector.fromSubpackets(result));
     }
 
     /** Writes this object to an ObjectOutputStream. */
@@ -94,7 +119,7 @@ public class WrappedUserAttribute implements Serializable {
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         BCPGOutputStream bcpg = new BCPGOutputStream(baos);
-        bcpg.writePacket(new UserAttributePacket(mVector.toSubpacketArray()));
+        bcpg.writePacket(new UserAttributePacket(mSubpackets));
         out.writeObject(baos.toByteArray());
 
     }
@@ -107,12 +132,11 @@ public class WrappedUserAttribute implements Serializable {
         if ( ! UserAttributePacket.class.isInstance(p)) {
             throw new IOException("Could not decode UserAttributePacket!");
         }
-        mVector = new PGPUserAttributeSubpacketVector(((UserAttributePacket) p).getSubpackets());
-
+        mSubpackets = ((UserAttributePacket) p).getSubpackets();
     }
 
     public byte[][] getSubpackets() {
-        UserAttributeSubpacket[] subpackets = mVector.toSubpacketArray();
+        UserAttributeSubpacket[] subpackets = mSubpackets;
         byte[][] ret = new byte[subpackets.length][];
         for (int i = 0; i < subpackets.length; i++) {
             ret[i] = subpackets[i].getData();
@@ -129,7 +153,7 @@ public class WrappedUserAttribute implements Serializable {
         if (!WrappedUserAttribute.class.isInstance(o)) {
             return false;
         }
-        return mVector.equals(((WrappedUserAttribute) o).mVector);
+        return Arrays.equals(mSubpackets, ((WrappedUserAttribute) o).mSubpackets);
     }
 
 }

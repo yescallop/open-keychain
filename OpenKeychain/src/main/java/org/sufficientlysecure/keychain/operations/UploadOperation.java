@@ -151,6 +151,7 @@ public class UploadOperation extends BaseOperation<UploadKeyringParcel> {
 
         try {
             aos = new ArmoredOutputStream(bos);
+            aos.clearHeaders();
             keyring.encode(aos);
             aos.close();
 

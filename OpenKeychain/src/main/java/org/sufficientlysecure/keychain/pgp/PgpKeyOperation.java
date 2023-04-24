@@ -47,11 +47,6 @@ import org.bouncycastle.bcpg.S2K;
 import org.bouncycastle.bcpg.sig.Features;
 import org.bouncycastle.bcpg.sig.KeyFlags;
 import org.bouncycastle.bcpg.sig.RevocationReasonTags;
-import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
-import org.bouncycastle.crypto.generators.Ed25519KeyPairGenerator;
-import org.bouncycastle.crypto.params.Ed25519KeyGenerationParameters;
-import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 import org.bouncycastle.jce.spec.ElGamalParameterSpec;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPKeyFlags;
@@ -860,7 +855,7 @@ public class PgpKeyOperation {
                 if (change.getDummyStrip()) {
                     // IT'S DANGEROUS~
                     // no really, it is. this operation irrevocably removes the private key data from the key
-                    sKey = PGPSecretKey.constructGnuDummyKey(sKey.getPublicKey());
+                    sKey = PGPPublicKeyUtils.constructGnuDummyKey(sKey.getPublicKey());
                     sKR = PGPSecretKeyRing.insertSecretKey(sKR, sKey);
                 } else if (change.getMoveKeyToSecurityToken()) {
                     if (checkSecurityTokenCompatibility(sKey, log, indent + 1)) {
@@ -881,7 +876,7 @@ public class PgpKeyOperation {
                     log.add(LogType.MSG_MF_KEYTOCARD_FINISH, indent + 1,
                             KeyFormattingUtils.convertKeyIdToHex(change.getSubKeyId()),
                             Hex.toHexString(change.getSecurityTokenSerialNo(), 8, 6));
-                    sKey = PGPSecretKey.constructGnuDummyKey(sKey.getPublicKey(), change.getSecurityTokenSerialNo());
+                    sKey = PGPPublicKeyUtils.constructGnuDummyKey(sKey.getPublicKey(), change.getSecurityTokenSerialNo());
                     sKR = PGPSecretKeyRing.insertSecretKey(sKR, sKey);
                 }
 
@@ -1065,7 +1060,7 @@ public class PgpKeyOperation {
                             masterPublicKey, masterPrivateKey,
                             getSignatureGenerator(pKey, cryptoInput, false), keyPair.getPrivateKey(), pKey,
                             add.getFlags(), add.getExpiry());
-                    pKey = PGPPublicKey.addSubkeyBindingCertification(pKey, cert);
+                    pKey = PGPPublicKeyUtils.addSubkeyBindingCertification(pKey, cert);
                 } catch (NfcInteractionNeeded e) {
                     nfcSignOps.addHash(e.hashToSign, e.hashAlgo);
                 }
@@ -1222,7 +1217,7 @@ public class PgpKeyOperation {
                 // IT'S DANGEROUS~
                 // no really, it is. this operation irrevocably removes the private key data from the key
                 if (change.getDummyStrip()) {
-                    sKey = PGPSecretKey.constructGnuDummyKey(sKey.getPublicKey());
+                    sKey = PGPPublicKeyUtils.constructGnuDummyKey(sKey.getPublicKey());
                 } else {
                     // the serial number must be 16 bytes in length
                     if (change.getSecurityTokenSerialNo().length != 16) {
@@ -1233,7 +1228,7 @@ public class PgpKeyOperation {
                     log.add(LogType.MSG_MF_KEYTOCARD_FINISH, indent + 1,
                             KeyFormattingUtils.convertKeyIdToHex(change.getSubKeyId()),
                             Hex.toHexString(change.getSecurityTokenSerialNo(), 8, 6));
-                    sKey = PGPSecretKey.constructGnuDummyKey(sKey.getPublicKey(), change.getSecurityTokenSerialNo());
+                    sKey = PGPPublicKeyUtils.constructGnuDummyKey(sKey.getPublicKey(), change.getSecurityTokenSerialNo());
                 }
                 sKR = PGPSecretKeyRing.insertSecretKey(sKR, sKey);
             }
@@ -1545,6 +1540,8 @@ public class PgpKeyOperation {
             /* non-critical subpackets: */
             hashedPacketsGen.setPreferredSymmetricAlgorithms(false,
                     PgpSecurityConstants.PREFERRED_SYMMETRIC_ALGORITHMS);
+            hashedPacketsGen.setPreferredAEADAlgorithms(false,
+                    PgpSecurityConstants.PREFERRED_AEAD_ALGORITHMS);
             hashedPacketsGen.setPreferredHashAlgorithms(false,
                     PgpSecurityConstants.PREFERRED_HASH_ALGORITHMS);
             hashedPacketsGen.setPreferredCompressionAlgorithms(false,
@@ -1554,7 +1551,7 @@ public class PgpKeyOperation {
             /* critical subpackets: we consider those important for a modern pgp implementation */
             hashedPacketsGen.setSignatureCreationTime(true, creationTime);
             // Request that senders add the MDC to the message (authenticate unsigned messages)
-            hashedPacketsGen.setFeature(true, Features.FEATURE_MODIFICATION_DETECTION);
+            hashedPacketsGen.setFeature(true, (byte) (Features.FEATURE_MODIFICATION_DETECTION | Features.FEATURE_AEAD_ENCRYPTED_DATA));
             hashedPacketsGen.setKeyFlags(true, flags);
             if (expiry > 0) {
                 hashedPacketsGen.setKeyExpirationTime(

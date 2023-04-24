@@ -30,6 +30,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.security.SignatureException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -42,13 +43,17 @@ import androidx.annotation.NonNull;
 import org.bouncycastle.bcpg.ArmoredOutputStream;
 import org.bouncycastle.bcpg.BCPGOutputStream;
 import org.bouncycastle.bcpg.CompressionAlgorithmTags;
+import org.bouncycastle.bcpg.sig.Features;
 import org.bouncycastle.openpgp.PGPCompressedDataGenerator;
 import org.bouncycastle.openpgp.PGPEncryptedDataGenerator;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPLiteralData;
 import org.bouncycastle.openpgp.PGPLiteralDataGenerator;
+import org.bouncycastle.openpgp.PGPPublicKey;
+import org.bouncycastle.openpgp.PGPSignature;
 import org.bouncycastle.openpgp.PGPSignatureGenerator;
 import org.bouncycastle.openpgp.PGPUtil;
+import org.bouncycastle.openpgp.operator.PGPKeyEncryptionMethodGenerator;
 import org.bouncycastle.openpgp.operator.jcajce.JcePBEKeyEncryptionMethodGenerator;
 import org.bouncycastle.openpgp.operator.jcajce.JcePGPDataEncryptorBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.NfcSyncPGPContentSignerBuilder;
@@ -62,6 +67,7 @@ import org.sufficientlysecure.keychain.operations.results.OperationResult.LogTyp
 import org.sufficientlysecure.keychain.operations.results.OperationResult.OperationLog;
 import org.sufficientlysecure.keychain.operations.results.PgpSignEncryptResult;
 import org.sufficientlysecure.keychain.operations.results.SignEncryptResult;
+import org.sufficientlysecure.keychain.pgp.PgpSecurityConstants.OpenKeychainAEADAlgorithmTags;
 import org.sufficientlysecure.keychain.pgp.PgpSecurityConstants.OpenKeychainCompressionAlgorithmTags;
 import org.sufficientlysecure.keychain.pgp.PgpSecurityConstants.OpenKeychainHashAlgorithmTags;
 import org.sufficientlysecure.keychain.pgp.PgpSecurityConstants.OpenKeychainSymmetricKeyAlgorithmTags;
@@ -71,6 +77,7 @@ import org.sufficientlysecure.keychain.service.input.RequiredInputParcel;
 import org.sufficientlysecure.keychain.ui.util.KeyFormattingUtils;
 import org.sufficientlysecure.keychain.util.FileHelper;
 import org.sufficientlysecure.keychain.util.InputData;
+import org.sufficientlysecure.keychain.util.IterableIterator;
 import org.sufficientlysecure.keychain.util.Passphrase;
 import org.sufficientlysecure.keychain.util.ProgressScaler;
 import timber.log.Timber;
@@ -194,6 +201,7 @@ public class PgpSignEncryptOperation extends BaseOperation<PgpSignEncryptInputPa
         OutputStream out;
         if (data.isEnableAsciiArmorOutput()) {
             armorOut = new ArmoredOutputStream(new BufferedOutputStream(outputStream, 1 << 16));
+            armorOut.clearHeaders();
             if (data.getVersionHeader() != null) {
                 armorOut.setHeader("Version", data.getVersionHeader());
             }
@@ -317,12 +325,9 @@ public class PgpSignEncryptOperation extends BaseOperation<PgpSignEncryptInputPa
             if (symmetricEncryptionAlgorithm == OpenKeychainSymmetricKeyAlgorithmTags.USE_DEFAULT) {
                 symmetricEncryptionAlgorithm = PgpSecurityConstants.DEFAULT_SYMMETRIC_ALGORITHM;
             }
-            JcePGPDataEncryptorBuilder encryptorBuilder =
-                    new JcePGPDataEncryptorBuilder(symmetricEncryptionAlgorithm)
-                            .setProvider(Constants.BOUNCY_CASTLE_PROVIDER_NAME)
-                            .setWithIntegrityPacket(true);
 
-            cPk = new PGPEncryptedDataGenerator(encryptorBuilder);
+            List<PGPKeyEncryptionMethodGenerator> methods = new ArrayList<>();
+            byte commonFeatures = 0b11;
 
             if (data.getSymmetricPassphrase() != null) {
                 // Symmetric encryption
@@ -330,7 +335,7 @@ public class PgpSignEncryptOperation extends BaseOperation<PgpSignEncryptInputPa
 
                 JcePBEKeyEncryptionMethodGenerator symmetricEncryptionGenerator =
                         new JcePBEKeyEncryptionMethodGenerator(data.getSymmetricPassphrase().getCharArray());
-                cPk.addMethod(symmetricEncryptionGenerator);
+                methods.add(symmetricEncryptionGenerator);
             } else {
                 log.add(LogType.MSG_PSE_ASYMMETRIC, indent);
 
@@ -340,18 +345,38 @@ public class PgpSignEncryptOperation extends BaseOperation<PgpSignEncryptInputPa
                         continue;
                     }
 
-                    boolean success = processEncryptionMasterKeyId(indent, log, data, cPk, encryptMasterKeyId);
-                    if (!success) {
+                    byte features = processEncryptionMasterKeyId(indent, log, data, methods, encryptMasterKeyId);
+                    if (features < 0) {
                         return new PgpSignEncryptResult(PgpSignEncryptResult.RESULT_ERROR, log);
                     }
+                    commonFeatures &= features;
                 }
 
                 if (additionalEncryptId != Constants.key.none) {
-                    boolean success = processEncryptionMasterKeyId(indent, log, data, cPk, additionalEncryptId);
-                    if (!success) {
+                    byte features = processEncryptionMasterKeyId(indent, log, data, methods, additionalEncryptId);
+                    if (features < 0) {
                         return new PgpSignEncryptResult(PgpSignEncryptResult.RESULT_ERROR, log);
                     }
+                    commonFeatures &= features;
                 }
+            }
+
+            JcePGPDataEncryptorBuilder encryptorBuilder =
+                    new JcePGPDataEncryptorBuilder(symmetricEncryptionAlgorithm)
+                            .setProvider(Constants.BOUNCY_CASTLE_PROVIDER_NAME)
+                            .setWithIntegrityPacket(true);
+
+            if ((commonFeatures & Features.FEATURE_AEAD_ENCRYPTED_DATA) != 0) {
+                int aeadAlgorithm = data.getAEADAlgorithm();
+                if (aeadAlgorithm == OpenKeychainAEADAlgorithmTags.USE_DEFAULT) {
+                    aeadAlgorithm = PgpSecurityConstants.DEFAULT_AEAD_ALGORITHM;
+                }
+                encryptorBuilder.setWithAEAD(aeadAlgorithm, 22);
+            }
+
+            cPk = new PGPEncryptedDataGenerator(encryptorBuilder);
+            for (PGPKeyEncryptionMethodGenerator method : methods) {
+                cPk.addMethod(method);
             }
         }
 
@@ -496,6 +521,7 @@ public class PgpSignEncryptOperation extends BaseOperation<PgpSignEncryptInputPa
                 OutputStream detachedOut = detachedByteOut;
                 if (data.isEnableAsciiArmorOutput()) {
                     detachedArmorOut = new ArmoredOutputStream(new BufferedOutputStream(detachedOut, 1 << 16));
+                    detachedArmorOut.clearHeaders();
                     if (data.getVersionHeader() != null) {
                         detachedArmorOut.setHeader("Version", data.getVersionHeader());
                     }
@@ -647,33 +673,46 @@ public class PgpSignEncryptOperation extends BaseOperation<PgpSignEncryptInputPa
         return result;
     }
 
-    private boolean processEncryptionMasterKeyId(int indent, OperationLog log, PgpSignEncryptData data,
-            PGPEncryptedDataGenerator cPk, long encryptMasterKeyId) {
+    private byte processEncryptionMasterKeyId(int indent, OperationLog log, PgpSignEncryptData data,
+            List<PGPKeyEncryptionMethodGenerator> methods, long encryptMasterKeyId) {
+        CanonicalizedPublicKeyRing keyRing;
         try {
-            CanonicalizedPublicKeyRing keyRing = mKeyRepository.getCanonicalizedPublicKeyRing(encryptMasterKeyId);
-            List<Long> encryptSubKeyIds = mKeyRepository.getPublicEncryptionIds(encryptMasterKeyId);
-            for (Long subKeyId : encryptSubKeyIds) {
-                CanonicalizedPublicKey key = keyRing.getPublicKey(subKeyId);
-                cPk.addMethod(key.getPubKeyEncryptionGenerator(data.isHiddenRecipients()));
-                log.add(LogType.MSG_PSE_KEY_OK, indent + 1,
-                        KeyFormattingUtils.convertKeyIdToHex(subKeyId));
-            }
-            if (encryptSubKeyIds.isEmpty()) {
-                log.add(LogType.MSG_PSE_KEY_WARN, indent + 1,
-                        KeyFormattingUtils.convertKeyIdToHex(encryptMasterKeyId));
-                return false;
-            }
-            // Make sure key is not expired or revoked
-            if (keyRing.isExpired() || keyRing.isRevoked()) {
-                log.add(LogType.MSG_PSE_ERROR_REVOKED_OR_EXPIRED, indent);
-                return false;
-            }
+             keyRing = mKeyRepository.getCanonicalizedPublicKeyRing(encryptMasterKeyId);
         } catch (KeyWritableRepository.NotFoundException e) {
             log.add(LogType.MSG_PSE_KEY_UNKNOWN, indent + 1,
                     KeyFormattingUtils.convertKeyIdToHex(encryptMasterKeyId));
-            return false;
+            return -1;
         }
-        return true;
+
+        List<Long> encryptSubKeyIds = mKeyRepository.getPublicEncryptionIds(encryptMasterKeyId);
+        for (Long subKeyId : encryptSubKeyIds) {
+            CanonicalizedPublicKey key = keyRing.getPublicKey(subKeyId);
+            methods.add(key.getPubKeyEncryptionGenerator(data.isHiddenRecipients()));
+            log.add(LogType.MSG_PSE_KEY_OK, indent + 1,
+                    KeyFormattingUtils.convertKeyIdToHex(subKeyId));
+        }
+        if (encryptSubKeyIds.isEmpty()) {
+            log.add(LogType.MSG_PSE_KEY_WARN, indent + 1,
+                    KeyFormattingUtils.convertKeyIdToHex(encryptMasterKeyId));
+            return -1;
+        }
+        // Make sure key is not expired or revoked
+        if (keyRing.isExpired() || keyRing.isRevoked()) {
+            log.add(LogType.MSG_PSE_ERROR_REVOKED_OR_EXPIRED, indent);
+            return -1;
+        }
+
+        PGPPublicKey key = keyRing.getPublicKey(encryptMasterKeyId).mPublicKey;
+
+        byte commonFeatures = 0b11;
+        for (PGPSignature sig : new IterableIterator<>(key.getSignatures())) {
+            Features features = sig.getHashedSubPackets().getFeatures();
+            if (features != null) {
+                commonFeatures &= features.getFeatures();
+            }
+        }
+
+        return commonFeatures;
     }
 
     /**

@@ -18,6 +18,7 @@
 package org.sufficientlysecure.keychain.pgp;
 
 
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
@@ -27,6 +28,7 @@ import java.util.Map;
 
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.bcpg.S2K;
+import org.bouncycastle.bcpg.SecretKeyPacket;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
 import org.bouncycastle.openpgp.AuthenticationSignatureGenerator;
 import org.bouncycastle.openpgp.PGPException;
@@ -399,7 +401,15 @@ public class CanonicalizedSecretKey extends CanonicalizedPublicKey {
     }
 
     public byte[] getIv() {
-        return mSecretKey.getIV();
+        try {
+            Field secret = PGPSecretKey.class.getDeclaredField("secret");
+            secret.setAccessible(true);
+            return ((SecretKeyPacket) secret.get(mSecretKey)).getIV();
+        } catch (NoSuchFieldException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     static class PrivateKeyNotUnlockedException extends RuntimeException {

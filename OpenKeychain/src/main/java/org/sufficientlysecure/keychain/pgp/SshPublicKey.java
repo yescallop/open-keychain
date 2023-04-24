@@ -22,6 +22,8 @@ import org.bouncycastle.bcpg.ECPublicBCPGKey;
 import org.bouncycastle.bcpg.EdDSAPublicBCPGKey;
 import org.bouncycastle.bcpg.RSAPublicBCPGKey;
 import org.bouncycastle.openpgp.PGPPublicKey;
+import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.BigIntegers;
 import org.sufficientlysecure.keychain.pgp.exception.PgpGeneralException;
 import org.sufficientlysecure.keychain.ssh.key.SshDSAPublicKey;
 import org.sufficientlysecure.keychain.ssh.key.SshECDSAPublicKey;
@@ -29,6 +31,7 @@ import org.sufficientlysecure.keychain.ssh.key.SshEd25519PublicKey;
 import org.sufficientlysecure.keychain.ssh.key.SshRSAPublicKey;
 import org.sufficientlysecure.keychain.ssh.utils.SshUtils;
 
+import java.math.BigInteger;
 import java.security.NoSuchAlgorithmException;
 
 public class SshPublicKey {
@@ -77,7 +80,14 @@ public class SshPublicKey {
     private String encodeEdDSAKey(PGPPublicKey publicKey) {
         EdDSAPublicBCPGKey publicBCPGKey = (EdDSAPublicBCPGKey) publicKey.getPublicKeyPacket().getKey();
 
-        SshEd25519PublicKey pubkey = new SshEd25519PublicKey(publicBCPGKey.getEdDSAEncodedPoint());
+        BigInteger encodedPoint = publicBCPGKey.getEncodedPoint();
+        byte[] pointData = BigIntegers.asUnsignedByteArray(encodedPoint);
+        if (pointData[0] != 0x40)
+        {
+            throw new IllegalStateException("Invalid point format in EdDSA key!");
+        }
+
+        SshEd25519PublicKey pubkey = new SshEd25519PublicKey(Arrays.copyOfRange(pointData, 1, pointData.length));
 
         return pubkey.getPublicKeyBlob();
     }

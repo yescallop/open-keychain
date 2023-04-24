@@ -156,7 +156,7 @@ public class CanonicalizedPublicKeyRing extends CanonicalizedKeyRing {
 
     /** Create a dummy secret ring from this key */
     public UncachedKeyRing createDivertSecretRing(byte[] cardAid, List<byte[]> subKeyFingerprints) {
-        PGPSecretKeyRing secRing = PGPSecretKeyRing.constructDummyFromPublic(getRing(), cardAid);
+        PGPSecretKeyRing secRing = PGPPublicKeyUtils.constructGnuDummyKeyRing(getRing(), cardAid);
 
         if (subKeyFingerprints == null) {
             return new UncachedKeyRing(secRing);
@@ -164,7 +164,7 @@ public class CanonicalizedPublicKeyRing extends CanonicalizedKeyRing {
 
         // if only specific subkeys should be promoted, construct a
         // stripped dummy, then move divert-to-card keys over
-        PGPSecretKeyRing newRing = PGPSecretKeyRing.constructDummyFromPublic(getRing());
+        PGPSecretKeyRing newRing = PGPPublicKeyUtils.constructGnuDummyKeyRing(getRing());
         for (byte[] subKeyFingerprint : subKeyFingerprints) {
             PGPSecretKey key = secRing.getSecretKey(KeyFormattingUtils.convertFingerprintToKeyId(subKeyFingerprint));
             if (key != null && Arrays.equals(subKeyFingerprint, key.getPublicKey().getFingerprint())) {

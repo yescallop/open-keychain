@@ -557,7 +557,7 @@ public class UncachedKeyringCanonicalizeTest {
                     masterPublicKey, masterSecretKey.getPrivateKey(),
                     PgpKeyOperation.getSignatureGenerator(masterSecretKey.getSecretKey(), null),
                     masterSecretKey.getPrivateKey(), masterPublicKey, masterSecretKey.getKeyUsage(), 0);
-            PGPPublicKey subPubKey = PGPPublicKey.addSubkeyBindingCertification(masterPublicKey, cert);
+            PGPPublicKey subPubKey = PGPPublicKeyUtils.addSubkeyBindingCertification(masterPublicKey, cert);
 
             PGPSecretKey sKey;
             {
